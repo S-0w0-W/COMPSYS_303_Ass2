@@ -5,6 +5,11 @@
 #include "sys/alt_alarm.h"
 #include "stdbool.h"
 
+
+#include <unistd.h>
+#include <stddef.h>
+#include <fcntl.h>
+
 //DEFINE Variables
 #define AVI_VALUE 300
 #define AEI_VALUE 800
@@ -112,7 +117,13 @@ alt_u32 URI_ISR(void* context){
 
 int main()
 {
+
   reset();
+  int fd = 0;
+int reading = 0;
+
+char voidBuffer;
+fd = open(UART_NAME, O_NONBLOCK | O_RDWR);
 
   while(1){
 	  //Fetch button inputs
@@ -125,33 +136,43 @@ int main()
 
 
 //===================== A and V sense ======================================
-	  VSense_read = !(IORD_ALTERA_AVALON_PIO_DATA(BUTTONS_BASE)&0x1);
-	  ASense_read = !(IORD_ALTERA_AVALON_PIO_DATA(BUTTONS_BASE)&0x2);
-
-	  if (VSense_read == 1 && Vprev == 0){
-		  VSense_Flag = 1;
-	  }
-	  if (ASense_read == 1 && Aprev == 0){
-	  		  ASense_Flag = 1;
-	  	  }
-	  VSense = VSense_Flag;
-	  ASense = ASense_Flag;
-	  Vprev = VSense_read;
-	  Aprev = ASense_read;
-
-	  if(VSense_Flag == 1 && !VRP_Flag){
-		  IOWR_ALTERA_AVALON_PIO_DATA(LEDS_GREEN_BASE, 0b000001);
-		  alt_alarm_start(&LED_TimerV, LED_VALUE, VLED_ISR,LED_ContextV);
-	  }
-	  if(ASense_Flag == 1){
-		  printf("A Sensed\n");
-
-		  IOWR_ALTERA_AVALON_PIO_DATA(LEDS_GREEN_BASE, 0b000010);
-
-		  alt_alarm_start(&LED_TimerA, LED_VALUE, ALED_ISR,LED_ContextA);
-		  printf("Timer started\n");
-	  }
+//	  VSense_read = !(IORD_ALTERA_AVALON_PIO_DATA(BUTTONS_BASE)&0x1);
+//	  ASense_read = !(IORD_ALTERA_AVALON_PIO_DATA(BUTTONS_BASE)&0x2);
+//
+//	  if (VSense_read == 1 && Vprev == 0){
+//		  VSense_Flag = 1;
+//	  }
+//	  if (ASense_read == 1 && Aprev == 0){
+//		  ASense_Flag = 1;
+//	  }
+//	  VSense = VSense_Flag;
+//	  ASense = ASense_Flag;
+//	  Vprev = VSense_read;
+//	  Aprev = ASense_read;
+//
+//	  if(VSense_Flag == 1 && !VRP_Flag){
+//		  IOWR_ALTERA_AVALON_PIO_DATA(LEDS_GREEN_BASE, 0b000001);
+//		  alt_alarm_start(&LED_TimerV, LED_VALUE, VLED_ISR,LED_ContextV);
+//	  }
+//	  if(ASense_Flag == 1){
+//		  printf("A Sensed\n");
+//
+//		  IOWR_ALTERA_AVALON_PIO_DATA(LEDS_GREEN_BASE, 0b000010);
+//
+//		  alt_alarm_start(&LED_TimerA, LED_VALUE, ALED_ISR,LED_ContextA);
+//		  printf("Timer started\n");
+//	  }
 //===========================================================================
+	  reading = read(fd, (void*)&voidBuffer,1);
+		if( reading != -1){
+			printf("\nCharacter ready: ");
+			printf("%c", voidBuffer);
+			if (voidBuffer == 'A'){
+				ASense = 1;
+			} else if (voidBuffer == 'V'){
+				VSense = 1;
+			}
+		}
 
 	  //======================= EXPIRE ============================
 	  if (VRP_ex){
@@ -170,7 +191,7 @@ int main()
 		  AVI_ex_Flag = 0;
 		  alt_alarm_stop(&AVI_Timer);
 		  AVI_Flag = 0;
-		  printf("AVI Timer expired\n");
+		  //printf("AVI Timer expired\n");
 	  }
 	  if (AEI_ex){
 		  AEI_ex_Flag = 0;
@@ -191,14 +212,17 @@ int main()
 
 	  tick();
 
-	  VSense_Flag = 0;
-	  ASense_Flag = 0;
+	  VSense = 0;
+	  ASense = 0;
 	  //Do outputs
 
 	  if (VPace){
 		  IOWR_ALTERA_AVALON_PIO_DATA(LEDS_GREEN_BASE, 0b010000);
 		  alt_alarm_start(&LED_TimerV, LED_VALUE, ALED_ISR,LED_ContextA);
-		  //printf("V paced\n");
+		  printf("V paced\n");
+
+		  write(fd, "V",1);
+		  printf("\nWriting V");
 	  }
 
 
@@ -206,6 +230,8 @@ int main()
 		  IOWR_ALTERA_AVALON_PIO_DATA(LEDS_GREEN_BASE, 0b100000);
 		  alt_alarm_start(&LED_TimerA, LED_VALUE, ALED_ISR,LED_ContextA);
 		  printf("A paced\n");
+		  write(fd, "A",1);
+		  printf("\nWriting A");
 	  }
 
 	  //======================= START ============================
@@ -224,12 +250,12 @@ int main()
 	  if(AVI_stop && AVI_Flag){
 		  alt_alarm_stop(&AVI_Timer);
 		  AVI_Flag = 0;
-		  printf("AVI Timer stopped\n");
+		  //printf("AVI Timer stopped\n");
 	  }
 	  if(AVI_start && !AVI_Flag){
 		  alt_alarm_start(&AVI_Timer, AVI_VALUE, AVI_ISR,AVI_Context);
 		  AVI_Flag = 1;
-		  printf("AVI Timer started\n");
+		  //printf("AVI Timer started\n");
 	  }
 
 	  if(AEI_start){
